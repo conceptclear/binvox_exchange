@@ -11,6 +11,7 @@ from OCC.Core.TopLoc import TopLoc_Location
 from OCC.Core.TopoDS import TopoDS_Shape, TopoDS_Compound, TopoDS_Builder
 
 from OCC.Core.STEPControl import STEPControl_Writer, STEPControl_AsIs
+from OCC.Core.IGESControl import IGESControl_Writer
 from OCC.Core.Interface import Interface_Static_SetCVal
 from OCC.Core.IFSelect import IFSelect_RetDone
 
@@ -25,11 +26,40 @@ def binvox_to_step(binvox_file, voxel_length, voxel_width, voxel_height, applica
     """
     with open(binvox_file, 'rb') as f:
         model = binvox_rw.read_as_3d_array(f)
+    voxel = voxel_to_TopoDS(model, voxel_length, voxel_width, voxel_height)
 
     # initialize the STEP exporter
     step_writer = STEPControl_Writer()
     Interface_Static_SetCVal("write.step.schema", application_protocol)
 
+    # transfer shapes and write file
+    step_writer.Transfer(voxel, STEPControl_AsIs)
+    status = step_writer.Write(binvox_file[:-6]+"stp")
+    if status != IFSelect_RetDone:
+        raise AssertionError("load failed")
+
+
+def binvox_to_iges(binvox_file, voxel_length, voxel_width, voxel_height):
+    """function used to change binvox file to iges file
+    binvox_file: the binvox file ('chair.binvox' etc.)
+    voxel_length: the length of one voxel
+    voxel_width: the width of one voxel
+    voxel_height: the height of one voxel
+    """
+    with open(binvox_file, 'rb') as f:
+        model = binvox_rw.read_as_3d_array(f)
+    voxel = voxel_to_TopoDS(model, voxel_length, voxel_width, voxel_height)
+
+    # creates and initialise the step exporter
+    iges_writer = IGESControl_Writer()
+    iges_writer.AddShape(voxel)
+    status = iges_writer.Write(binvox_file[:-6]+"iges")
+
+    if status != IFSelect_RetDone:
+        raise AssertionError("Not done.")
+
+
+def voxel_to_TopoDS(model, voxel_length, voxel_width, voxel_height):
     (position_x, position_y, position_z) = np.where(model.data)
     voxel = TopoDS_Compound()
     counter = TopoDS_Builder()
@@ -44,12 +74,8 @@ def binvox_to_step(binvox_file, voxel_length, voxel_width, voxel_height, applica
         voxel1.Location(location)
         counter.Add(voxel, voxel1)
 
-    # transfer shapes and write file
-    step_writer.Transfer(voxel, STEPControl_AsIs)
-    status = step_writer.Write(binvox_file[:-6]+"stp")
-    if status != IFSelect_RetDone:
-        raise AssertionError("load failed")
+    return voxel
 
 
 if __name__ == '__main__':
-    binvox_to_step('bunny_32.binvox',10,10,10)
+    binvox_to_iges('bunny_32.binvox',10,10,10)
